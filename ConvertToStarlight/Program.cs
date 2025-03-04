@@ -1,12 +1,10 @@
-﻿// Define sources and targets
-
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.RegularExpressions;
 using ConvertToStarlight;
 using Tomlyn;
 using Tomlyn.Syntax;
-using YamlDotNet.RepresentationModel;
 
+// Define sources and targets
 var sourcePathPrefix = "/Users/maartenba/Projects/Duende/docs.duendesoftware.com";
 var targetPathPrefix = "/Users/maartenba/Desktop/starlight/docs/src/content/docs";
 var docsFolders = new List<DocsFolder>
