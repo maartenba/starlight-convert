@@ -105,6 +105,7 @@ foreach (var docsFolder in docsFolders)
             if (!file.EndsWith(".md")) return;
 
             var filePath = Path.Combine(contentPath, sourcePath.Replace(contentPath, "").TrimStart(Path.DirectorySeparatorChar), file);
+            var fileDirectory = Path.GetDirectoryName(filePath);
 
             // 0. _index.md should be index.md
             if (Path.GetFileName(filePath) == "_index.md")
@@ -125,10 +126,29 @@ foreach (var docsFolder in docsFolders)
                 return;
             }
 
-            // 1. ../images/ should be images/
+            // 1. ../images/ should be images/ (but not always)
             if (fileContent.Contains("../images/"))
             {
-                fileContent = fileContent.Replace("../images/", "images/");
+                fileContent = Regex.Replace(fileContent, @"(\.\./)+images/([\w\-.]+)", match =>
+                {
+                    var relativePath = match.Value;
+                    var fileName = match.Groups[2].Value;
+
+                    for (var i = 0; i < 3; i++)
+                    {
+                        if (!File.Exists(Path.Combine(fileDirectory, relativePath)))
+                        {
+                            relativePath = relativePath.Substring(3);
+                        }
+                        else
+                        {
+                            return relativePath;
+                        }
+                    }
+
+                    throw new Exception("Image not found.");
+                });
+
                 fileChanged = true;
             }
 
@@ -201,14 +221,33 @@ foreach (var docsFolder in docsFolders)
                 fileContent = "---\n" + fileContent;
             }
 
-            // 4. Rename ```c# language
+            // 4. Parse frontmatter
+            if (fileContent.StartsWith("---"))
+            {
+                var frontMatterEnds = fileContent.Substring(3).IndexOf("---", StringComparison.OrdinalIgnoreCase);
+                var frontMatterYamlString = fileContent.Substring(3, frontMatterEnds - 1);
+
+                var frontmatterYaml = new YamlDotNet.Serialization.Deserializer().Deserialize<Dictionary<string, object>>(frontMatterYamlString);
+
+                // Strip # {title}
+                var frontmatterTitle = frontmatterYaml["title"]?.ToString()?.Trim('"');
+                if (!string.IsNullOrEmpty(frontmatterTitle) && fileContent.Contains($"# {frontmatterTitle}", StringComparison.OrdinalIgnoreCase))
+                {
+                    fileChanged = true;
+                    fileContent = fileContent
+                        .Replace($"# {frontmatterTitle}\n\n", "", StringComparison.OrdinalIgnoreCase)
+                        .Replace($"# {frontmatterTitle}\n", "", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            // 5. Rename ```c# language
             if (fileContent.Contains("```c#", StringComparison.OrdinalIgnoreCase))
             {
                 fileChanged = true;
                 fileContent = fileContent.Replace("```c#", "```csharp", StringComparison.OrdinalIgnoreCase);
             }
 
-            // 5. Handle {{ cases
+            // 6. Handle {{ cases
             if (fileContent.Contains("{{", StringComparison.OrdinalIgnoreCase))
             {
                 // {{< param parameter >}}
@@ -247,7 +286,6 @@ foreach (var docsFolder in docsFolders)
                             : "note";
 
                     return $":::{starlightType}";
-
                 });
 
                 // {{% /notice %}}
