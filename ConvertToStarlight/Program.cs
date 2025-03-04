@@ -12,6 +12,7 @@ var targetPathPrefix = "/Users/maartenba/Desktop/starlight/docs/src/content/docs
 var docsFolders = new List<DocsFolder>
 {
     new DocsFolder("BFF/v2/docs/content", "bff/v2"),
+    new DocsFolder("BFF/v3/docs/content", "bff/v3"),
     new DocsFolder("FOSS/content", "foss"),
     new DocsFolder("IdentityServer/v5/docs/content", "identityserver/v5"),
     new DocsFolder("IdentityServer/v6/docs/content", "identityserver/v6"),
