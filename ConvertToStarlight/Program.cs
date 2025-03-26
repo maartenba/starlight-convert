@@ -119,9 +119,24 @@ foreach (var docsFolder in docsFolders)
             var fileChanged = false;
             var fileContent = File.ReadAllText(filePath);
 
-            // Delete redirects
+            // Delete redirects (and log)
             if (fileContent.Contains("type: redirect") || fileContent.Contains("type: \"redirect\""))
             {
+                var fromPath = (sourcePath.Replace(contentPath, "").TrimStart(Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar + file).TrimStart(Path.DirectorySeparatorChar);
+                
+                var toPath = fileContent.Substring(fileContent.IndexOf("target: ") + "target: ".Length);
+                toPath = toPath.Substring(0, toPath.IndexOf("\n")).TrimStart(' ', '"').TrimEnd(' ', '"');
+                
+                    /*
+                     * ---
+                       title: "BFF (Backend For Frontend)"
+                       type: redirect
+                       baseUrl: bff
+                       target: "samples"
+                       ---
+                     */
+                Console.WriteLine($"\"/{docsFolder.ContentPath}/{fromPath.Replace(".md", "")}\": \"/bff/v3/{toPath.TrimStart('/')}\",");
+                
                 File.Delete(filePath);
                 return;
             }
