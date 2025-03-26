@@ -134,7 +134,7 @@ foreach (var docsFolder in docsFolders)
                     var relativePath = match.Value;
                     var fileName = match.Groups[2].Value;
 
-                    for (var i = 0; i < 3; i++)
+                    for (var i = 0; i < 6; i++)
                     {
                         if (!File.Exists(Path.Combine(fileDirectory, relativePath)))
                         {
@@ -259,7 +259,63 @@ foreach (var docsFolder in docsFolders)
                 });
 
                 // {{< ref "/session" >}}
-                fileContent = Regex.Replace(fileContent, @"\{\{<.?ref\s+""(?<path>[^""]+)""\s*>.?\}\}", match => match.Groups["path"].Value);
+                fileContent = Regex.Replace(fileContent, @"\{\{<.?ref\s+""(?<path>[^""]+)""\s*>.?\}\}", match =>
+                {
+                    var pathMatch = match.Groups["path"].Value;
+                    if (pathMatch.StartsWith('#'))
+                    {
+                        return pathMatch.ToLowerInvariant();
+                    }
+                    
+                    var splitPath = pathMatch.Split('#', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                    var path = splitPath[0];
+                    var anchor = splitPath.Length > 1 ? splitPath[1].ToLowerInvariant() : null;
+                    
+                    if (path.StartsWith('/'))
+                    {
+                        return $"/{docsFolder.ContentPath}{path}{(anchor != null ? "#" + anchor : "")}";
+                    }
+                    else
+                    {
+                        if (path.StartsWith("./"))
+                        {
+                            path = path.Substring(2);
+                        }
+                        path = path.TrimEnd('/');
+                        if (path.EndsWith(".md") && path.Length > 3)
+                        {
+                            path = path.Substring(0, path.Length - 3);
+                        }
+                        
+                        // Traverse up
+                        var traverseUpPath = path;
+                        for (var i = 0; i < 6; i++)
+                        {
+                            if (!File.Exists(Path.Combine(fileDirectory, traverseUpPath + ".md")) &&
+                                !Directory.Exists(Path.Combine(fileDirectory, traverseUpPath)))
+                            {
+                                traverseUpPath = ".." + Path.DirectorySeparatorChar + traverseUpPath;
+                            }
+                            else
+                            {
+                                return $"{traverseUpPath}{(anchor != null ? "#" + anchor : "")}";
+                            }
+                        }
+                        
+                        // Traverse down
+                        var traverseDownPath = Directory.EnumerateFiles(fileDirectory, path + ".md", SearchOption.AllDirectories)
+                            .Union(Directory.EnumerateDirectories(fileDirectory, path, SearchOption.AllDirectories))
+                            .FirstOrDefault();
+
+                        if (traverseDownPath != null)
+                        {
+                            return $"{traverseDownPath}{(anchor != null ? "#" + anchor : "")}";
+                        }
+                    }
+                    
+                    throw new Exception(match.Groups["path"].Value + " not found.");
+                });
+
 
                 // {{< ref-idsrv "/session" "title" >}}
                 fileContent = Regex.Replace(fileContent, @"\{\{<.?ref-idsrv\s+""(?<path>[^""]+)""(?:\s+""(?<text>[^""]+)"")?\s*>.?\}\}", match =>
@@ -340,7 +396,59 @@ foreach (var docsFolder in docsFolders)
 
                 fileChanged = true;
             }
+            
+            // 7. Markdown links
+            if (fileContent.Contains("](/", StringComparison.OrdinalIgnoreCase))
+            {
+                fileContent = Regex.Replace(fileContent, @"\[(?<title>[^\]]+)\]\(/(?<url>[^\)]+)\)", match =>
+                {
+                    var title = match.Groups["title"].Value;
+                    var url = $"/{docsFolder.ContentPath}/{match.Groups["url"].Value.Replace(docsFolder.ContentPath, "").TrimStart('/')}";
+            
+                    return $"[{title}]({url})";
+                });
+            
+                fileChanged = true;
+            }
+            if (fileContent.Contains("](", StringComparison.OrdinalIgnoreCase))
+            {
+                fileContent = Regex.Replace(fileContent, @"\[(?<title>[^\]]+)\]\((?<url>[^\)]+)\)", match =>
+                {
+                    var title = match.Groups["title"].Value;
 
+                    var urlMatch = match.Groups["url"].Value;
+                    if (urlMatch.StartsWith('#'))
+                    {
+                        return $"[{title}]({urlMatch.ToLowerInvariant()})";
+                    }
+                    
+                    var splitPath = urlMatch.Split('#', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                    var url = splitPath[0];
+                    var anchor = splitPath.Length > 1 ? splitPath[1].ToLowerInvariant() : null;
+            
+                    return $"[{title}]({url}{(anchor != null ? "#" + anchor : "")})";
+                });
+            
+                fileChanged = true;
+            }
+            
+            // Manual edits
+            if (filePath.Contains("reference") && fileContent.Contains("## Dynamic Client Registration Response"))
+            {
+                fileContent = fileContent.Replace("## Dynamic Client Registration Response", "## DynamicClientRegistrationResponse");
+                fileChanged = true;
+            } 
+            if (fileContent.Contains("/bff/v3/identityserver/v7/"))
+            {
+                fileContent = fileContent.Replace("/bff/v3/identityserver/v7/", "/identityserver/v7/");
+                fileChanged = true;
+            }
+            if (fileContent.Contains("/identityserver/v7/ui/server_side_sessions#session-expiration"))
+            {
+                fileContent = fileContent.Replace("/identityserver/v7/ui/server_side_sessions#session-expiration", "/identityserver/v7/ui/server_side_sessions/session-expiration");
+                fileChanged = true;
+            }
+            
             // Write changes
             if (fileChanged)
             {
